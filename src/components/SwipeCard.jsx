@@ -1,5 +1,3 @@
-import { useRef, useCallback } from 'react';
-
 const CARD_COLORS = [
   '#FFDAB9', // soft peach
   '#E6E6FA', // lavender
@@ -29,23 +27,12 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
   const bgColor = CARD_COLORS[colorIndex];
   const darkBgColor = DARK_CARD_COLORS[colorIndex];
 
-  const abstractRef = useRef(null);
-
-  // Prevent swipe gesture from interfering with abstract scrolling
-  const handleTouchStart = useCallback((e) => {
-    const el = abstractRef.current;
-    if (!el) return;
-    if (el.scrollHeight > el.clientHeight) {
-      e.stopPropagation();
-    }
-  }, []);
-
   return (
     <div
-      className="w-full max-w-[600px] rounded-2xl shadow-lg p-5 select-none relative overflow-hidden flex flex-col"
+      className="w-full max-w-[600px] rounded-2xl shadow-lg p-5 select-none relative overflow-hidden"
       style={{
         backgroundColor: bgColor,
-        minHeight: screeningPhase === 'abstract' ? '300px' : '160px',
+        minHeight: screeningPhase === 'abstract' ? '200px' : '160px',
       }}
     >
       {/* Dark mode overlay */}
@@ -55,24 +42,15 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
       />
 
       {/* Content */}
-      <div className="relative z-[1] flex flex-col flex-1 min-h-0">
+      <div className="relative z-[1]">
         {/* Title */}
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-snug mb-2 shrink-0">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-snug mb-2">
           {article.title || 'Untitled'}
         </h2>
 
-        {/* Abstract (only in abstract screening mode) — fills available space */}
+        {/* Abstract — no max-height, parent controls scrolling */}
         {screeningPhase === 'abstract' && article.abstract && (
-          <div
-            ref={abstractRef}
-            className="flex-1 overflow-y-auto mb-2 min-h-0"
-            style={{
-              maxHeight: 'calc(100dvh - 320px)',
-              WebkitOverflowScrolling: 'touch',
-              touchAction: 'pan-y',
-            }}
-            onTouchStart={handleTouchStart}
-          >
+          <div className="mb-2">
             <p className="text-[15px] text-gray-700 dark:text-gray-300 leading-relaxed">
               {article.abstract}
             </p>
@@ -80,7 +58,7 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
         )}
 
         {/* Metadata footer */}
-        <div className="mt-auto pt-2 border-t border-black/10 dark:border-white/10 space-y-1 shrink-0">
+        <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-1">
           {article.authors && (
             <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
               {article.authors}
@@ -95,7 +73,6 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
                 className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
               >
                 DOI
@@ -107,7 +84,6 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
                 className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
               >
                 PubMed

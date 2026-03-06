@@ -8,7 +8,6 @@ import ProgressBar from './ProgressBar';
 import ExclusionReasonPicker from './ExclusionReasonPicker';
 import KeyboardShortcuts from './KeyboardShortcuts';
 import { exportProgressJSON } from '../lib/csvExport';
-import db from '../lib/db';
 
 export default function ScreeningView() {
   const { id } = useParams();
@@ -35,7 +34,7 @@ export default function ScreeningView() {
 
   const isAbstractMode = project?.screeningPhase === 'abstract';
 
-  // ── Screen-edge glows via refs (NO state = NO re-renders during drag) ──
+  // ── Screen-edge glows via refs (title mode only, NO re-renders during drag) ──
   const leftGlowRef = useRef(null);
   const rightGlowRef = useRef(null);
   const topGlowRef = useRef(null);
@@ -52,7 +51,7 @@ export default function ScreeningView() {
     if (topGlowRef.current)   topGlowRef.current.style.opacity   = '0';
   }, []);
 
-  // ── Swipe action handler ──
+  // ── Core decision handler (used by both swipe and button paths) ──
   const handleSwipeAction = useCallback((direction) => {
     hideGlows();
     const timeOnCard = getTimeOnCard();
@@ -60,13 +59,11 @@ export default function ScreeningView() {
     if (direction === 'left') {
       if (isAbstractMode && project?.exclusionReasons?.length > 0) {
         // Abstract mode: defer saveDecision until reason is picked or skipped
-        // The card has already animated off, but currentIndex hasn't advanced
         setExcludedArticleTitle(currentArticle?.title || 'Untitled');
         setPendingExclude({ timeOnCard });
         setShowExclusionPicker(true);
         setAnnouncement('Excluded. Select an exclusion reason or skip.');
       } else {
-        // Title mode or no exclusion reasons: exclude immediately
         saveDecision('exclude', null, timeOnCard);
         setAnnouncement('Excluded.');
       }
@@ -80,7 +77,6 @@ export default function ScreeningView() {
   // ── Exclusion reason handling (atomic save) ──
   const handleExclusionReasonSelected = useCallback((reason) => {
     if (!pendingExclude) return;
-    // Now save the decision atomically with the reason
     saveDecision('exclude', reason, pendingExclude.timeOnCard);
     setShowExclusionPicker(false);
     setPendingExclude(null);
@@ -88,7 +84,6 @@ export default function ScreeningView() {
 
   const handleSkipExclusionReason = useCallback(() => {
     if (!pendingExclude) return;
-    // Save with null reason
     saveDecision('exclude', null, pendingExclude.timeOnCard);
     setShowExclusionPicker(false);
     setPendingExclude(null);
@@ -109,6 +104,17 @@ export default function ScreeningView() {
     }
   }, [id]);
 
+  // ── Button handler: abstract mode calls decision directly, title mode triggers TinderCard ──
+  const handleButtonPress = useCallback((direction) => {
+    if (isAbstractMode) {
+      handleSwipeAction(direction);
+    } else {
+      triggerSwipeRef.current?.(direction);
+    }
+  }, [isAbstractMode, handleSwipeAction]);
+
+  // useSwipe hook — in abstract mode, cardRef won't be attached to a TinderCard,
+  // so triggerSwipe falls through to call onSwipe directly
   const {
     cardRef,
     handleSwipe,
@@ -119,6 +125,10 @@ export default function ScreeningView() {
     onSwipe: handleSwipeAction,
     onUndo: handleUndo,
   });
+
+  // Keep a ref to triggerSwipe so handleButtonPress can access latest version
+  const triggerSwipeRef = useRef(triggerSwipe);
+  triggerSwipeRef.current = triggerSwipe;
 
   // Handle escape key and number keys for exclusion reasons
   useEffect(() => {
@@ -149,6 +159,14 @@ export default function ScreeningView() {
     }
   }, [isComplete, loading, id, navigate]);
 
+  // Auto-scroll to top when card changes (abstract mode)
+  const scrollContainerRef = useRef(null);
+  useEffect(() => {
+    if (isAbstractMode && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [currentIndex, isAbstractMode]);
+
   if (loading || !project) {
     return (
       <div className="flex items-center justify-center min-h-dvh">
@@ -170,40 +188,32 @@ export default function ScreeningView() {
     (project.exclusionCriteria && project.exclusionCriteria.length > 0);
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div className="h-dvh flex flex-col overflow-hidden">
       {/* Screen reader announcements */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}
       </div>
 
-      {/* ── Screen-edge glows (outside card, ref-driven, no re-renders) ── */}
-      <div
-        ref={leftGlowRef}
-        className="fixed left-0 top-0 bottom-0 w-20 pointer-events-none z-40"
-        style={{
-          opacity: 0,
-          transition: 'opacity 120ms ease-out',
-          background: 'linear-gradient(to right, rgba(239,68,68,0.3), transparent)',
-        }}
-      />
-      <div
-        ref={rightGlowRef}
-        className="fixed right-0 top-0 bottom-0 w-20 pointer-events-none z-40"
-        style={{
-          opacity: 0,
-          transition: 'opacity 120ms ease-out',
-          background: 'linear-gradient(to left, rgba(34,197,94,0.3), transparent)',
-        }}
-      />
-      <div
-        ref={topGlowRef}
-        className="fixed left-0 top-0 right-0 h-20 pointer-events-none z-40"
-        style={{
-          opacity: 0,
-          transition: 'opacity 120ms ease-out',
-          background: 'linear-gradient(to bottom, rgba(234,179,8,0.3), transparent)',
-        }}
-      />
+      {/* ── Screen-edge glows (title mode only) ── */}
+      {!isAbstractMode && (
+        <>
+          <div
+            ref={leftGlowRef}
+            className="fixed left-0 top-0 bottom-0 w-20 pointer-events-none z-40"
+            style={{ opacity: 0, transition: 'opacity 120ms ease-out', background: 'linear-gradient(to right, rgba(239,68,68,0.3), transparent)' }}
+          />
+          <div
+            ref={rightGlowRef}
+            className="fixed right-0 top-0 bottom-0 w-20 pointer-events-none z-40"
+            style={{ opacity: 0, transition: 'opacity 120ms ease-out', background: 'linear-gradient(to left, rgba(34,197,94,0.3), transparent)' }}
+          />
+          <div
+            ref={topGlowRef}
+            className="fixed left-0 top-0 right-0 h-20 pointer-events-none z-40"
+            style={{ opacity: 0, transition: 'opacity 120ms ease-out', background: 'linear-gradient(to bottom, rgba(234,179,8,0.3), transparent)' }}
+          />
+        </>
+      )}
 
       {/* ── Top bar ── */}
       <div className="px-4 pt-3 pb-2 max-w-[600px] w-full mx-auto shrink-0">
@@ -233,7 +243,6 @@ export default function ScreeningView() {
           </div>
         </div>
 
-        {/* Article counter */}
         <p className="text-xs text-center text-gray-400 dark:text-gray-500 mb-1">
           Article {currentIndex + 1} of {project.totalArticles}
         </p>
@@ -281,49 +290,72 @@ export default function ScreeningView() {
         )}
       </div>
 
-      {/* ── Card area ── */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-2 relative">
-        <div className="relative w-full max-w-[600px]" style={{ minHeight: '200px' }}>
-          {/* Next card (behind) */}
-          {nextArticle && (
-            <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'scale(0.95)', zIndex: 0 }} aria-hidden="true">
-              <SwipeCard
-                article={nextArticle}
-                screeningPhase={project.screeningPhase}
-                index={currentIndex + 1}
-              />
-            </div>
-          )}
+      {/* ══════════════════════════════════════════════════════════════
+           CARD AREA — two completely different layouts by phase
+         ══════════════════════════════════════════════════════════════ */}
 
-          {/* Current card */}
-          {currentArticle && (
-            <div className="relative" style={{ zIndex: 1 }}>
-              <TinderCard
-                ref={cardRef}
-                key={`card-${currentArticle.id}`}
-                onSwipe={(dir) => { hideGlows(); handleSwipe(dir); }}
-                onSwipeRequirementFulfilled={showGlow}
-                onSwipeRequirementUnfulfilled={hideGlows}
-                preventSwipe={['down']}
-                swipeRequirementType="position"
-                swipeThreshold={40}
-                flickOnSwipe={true}
-              >
-                <SwipeCard
-                  article={currentArticle}
-                  screeningPhase={project.screeningPhase}
-                  index={currentIndex}
-                />
-              </TinderCard>
-            </div>
-          )}
+      {isAbstractMode ? (
+        /* ── ABSTRACT MODE: plain scrollable card, no TinderCard ── */
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto px-4 pb-2 min-h-0"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          <div className="max-w-[600px] mx-auto py-2">
+            {currentArticle && (
+              <SwipeCard
+                article={currentArticle}
+                screeningPhase={project.screeningPhase}
+                index={currentIndex}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* ── TITLE MODE: swipeable TinderCard stack ── */
+        <div className="flex-1 flex items-center justify-center px-4 pb-2 relative">
+          <div className="relative w-full max-w-[600px]" style={{ minHeight: '200px' }}>
+            {/* Next card (behind) */}
+            {nextArticle && (
+              <div className="absolute inset-0 flex items-center justify-center" style={{ transform: 'scale(0.95)', zIndex: 0 }} aria-hidden="true">
+                <SwipeCard
+                  article={nextArticle}
+                  screeningPhase={project.screeningPhase}
+                  index={currentIndex + 1}
+                />
+              </div>
+            )}
+
+            {/* Current card */}
+            {currentArticle && (
+              <div className="relative" style={{ zIndex: 1 }}>
+                <TinderCard
+                  ref={cardRef}
+                  key={`card-${currentArticle.id}`}
+                  onSwipe={(dir) => { hideGlows(); handleSwipe(dir); }}
+                  onSwipeRequirementFulfilled={showGlow}
+                  onSwipeRequirementUnfulfilled={hideGlows}
+                  preventSwipe={['down']}
+                  swipeRequirementType="position"
+                  swipeThreshold={40}
+                  flickOnSwipe={true}
+                >
+                  <SwipeCard
+                    article={currentArticle}
+                    screeningPhase={project.screeningPhase}
+                    index={currentIndex}
+                  />
+                </TinderCard>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Action buttons (Yes / No / Maybe) ── */}
-      <div className="px-4 pb-6 flex items-center justify-center gap-4 max-w-[600px] w-full mx-auto shrink-0">
+      <div className="px-4 pb-6 pt-2 flex items-center justify-center gap-4 max-w-[600px] w-full mx-auto shrink-0 border-t border-gray-100 dark:border-gray-800">
         <button
-          onClick={() => triggerSwipe('left')}
+          onClick={() => handleButtonPress('left')}
           className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 flex flex-col items-center justify-center hover:bg-red-200 dark:hover:bg-red-800/60 transition-all active:scale-95 border-2 border-red-300 dark:border-red-600"
           aria-label="No (Exclude)"
         >
@@ -331,7 +363,7 @@ export default function ScreeningView() {
           <span className="text-[10px] font-semibold mt-0.5">No</span>
         </button>
         <button
-          onClick={() => triggerSwipe('up')}
+          onClick={() => handleButtonPress('up')}
           className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-800/50 text-amber-700 dark:text-amber-300 flex flex-col items-center justify-center hover:bg-amber-200 dark:hover:bg-amber-700/60 transition-all active:scale-95 border-2 border-amber-400 dark:border-amber-500"
           aria-label="Maybe"
         >
@@ -339,7 +371,7 @@ export default function ScreeningView() {
           <span className="text-[9px] font-semibold">Maybe</span>
         </button>
         <button
-          onClick={() => triggerSwipe('right')}
+          onClick={() => handleButtonPress('right')}
           className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300 flex flex-col items-center justify-center hover:bg-green-200 dark:hover:bg-green-800/60 transition-all active:scale-95 border-2 border-green-300 dark:border-green-600"
           aria-label="Yes (Include)"
         >
@@ -348,7 +380,7 @@ export default function ScreeningView() {
         </button>
       </div>
 
-      {/* Exclusion reason picker (abstract mode only, blocks interaction) */}
+      {/* Exclusion reason picker (abstract mode only) */}
       {showExclusionPicker && isAbstractMode && project.exclusionReasons?.length > 0 && (
         <ExclusionReasonPicker
           reasons={project.exclusionReasons}

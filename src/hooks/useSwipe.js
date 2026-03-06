@@ -6,9 +6,13 @@ export function useSwipe({ currentIndex, canInteract = true, onSwipe, onUndo }) 
   const triggerSwipe = useCallback((direction) => {
     if (!canInteract) return;
     if (cardRef.current) {
+      // TinderCard present (title mode): animate the card off-screen
       cardRef.current.swipe(direction);
+    } else if (onSwipe) {
+      // No TinderCard (abstract mode): fire decision directly
+      onSwipe(direction);
     }
-  }, [canInteract]);
+  }, [canInteract, onSwipe]);
 
   const handleSwipe = useCallback((direction) => {
     if (onSwipe) onSwipe(direction);

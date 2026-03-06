@@ -128,9 +128,14 @@ export default function ProjectSetup() {
         updatedAt: Date.now(),
       });
 
-      await importArticlesToDB(projectId, csvData, mapping, (done, total) => {
+      const importedCount = await importArticlesToDB(projectId, csvData, mapping, (done, total) => {
         setImportProgress({ done, total });
-      });
+      }, screeningPhase === 'abstract');
+
+      // Update totalArticles to actual imported count (may differ if filtered)
+      if (importedCount !== csvData.length) {
+        await db.projects.update(projectId, { totalArticles: importedCount });
+      }
 
       navigate(`/project/${projectId}/screen`);
     } catch (err) {
@@ -212,43 +217,47 @@ export default function ProjectSetup() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Inclusion Criteria (one per line)
-            </label>
-            <textarea
-              value={inclusionCriteria}
-              onChange={(e) => setInclusionCriteria(e.target.value)}
-              rows={3}
-              placeholder={"e.g., RCTs comparing intervention X vs Y\nAdult population (>18 years)\nPublished 2010-2024"}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
-          </div>
+          {screeningPhase === 'abstract' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Inclusion Criteria (one per line)
+                </label>
+                <textarea
+                  value={inclusionCriteria}
+                  onChange={(e) => setInclusionCriteria(e.target.value)}
+                  rows={3}
+                  placeholder={"e.g., RCTs comparing intervention X vs Y\nAdult population (>18 years)\nPublished 2010-2024"}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Exclusion Criteria (one per line)
-            </label>
-            <textarea
-              value={exclusionCriteria}
-              onChange={(e) => setExclusionCriteria(e.target.value)}
-              rows={3}
-              placeholder={"e.g., Animal studies\nCase reports\nNon-English language"}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Exclusion Criteria (one per line)
+                </label>
+                <textarea
+                  value={exclusionCriteria}
+                  onChange={(e) => setExclusionCriteria(e.target.value)}
+                  rows={3}
+                  placeholder={"e.g., Animal studies\nCase reports\nNon-English language"}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Exclusion Reasons for Quick-Select (one per line)
-            </label>
-            <textarea
-              value={exclusionReasons}
-              onChange={(e) => setExclusionReasons(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Exclusion Reasons for Quick-Select (one per line)
+                </label>
+                <textarea
+                  value={exclusionReasons}
+                  onChange={(e) => setExclusionReasons(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-mono"
+                />
+              </div>
+            </>
+          )}
 
           <button
             onClick={() => setStep(2)}
@@ -325,9 +334,21 @@ export default function ProjectSetup() {
             </div>
           )}
 
-          {(confidence === 'fuzzy' || confidence === 'ambiguous') && (
+          {confidence === 'ambiguous' && (
             <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg text-sm">
-              Could not auto-detect database format. Please verify the column mapping below.
+              Multiple database formats matched. Please verify the column mapping below.
+            </div>
+          )}
+
+          {confidence === 'fuzzy' && mapping.title && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm">
+              Columns mapped by header names. Please verify below.
+            </div>
+          )}
+
+          {confidence === 'fuzzy' && !mapping.title && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg text-sm">
+              Could not auto-detect columns. Please map them manually below.
             </div>
           )}
 

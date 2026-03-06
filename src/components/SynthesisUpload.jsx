@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { parseReviewerCSV, matchReviewers } from '../lib/synthesisMatch';
-import { calculateKappa, calculateFleissKappa } from '../lib/kappa';
+import { calculateKappa, calculateFleissKappa, computePABAK } from '../lib/kappa';
 import db from '../lib/db';
 import Papa from 'papaparse';
 
@@ -11,10 +11,12 @@ export default function SynthesisUpload() {
   const [reviewerData, setReviewerData] = useState([]);
   const [matchResult, setMatchResult] = useState(null);
   const [kappaResult, setKappaResult] = useState(null);
+  const [pabakResult, setPabakResult] = useState(null);
   const [fuzzyPending, setFuzzyPending] = useState([]);
   // fuzzyApproved items are immediately integrated into matchResult
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showUnmatched, setShowUnmatched] = useState(false);
 
   const handleFilesAdded = useCallback(async (files) => {
     setError('');
@@ -36,6 +38,7 @@ export default function SynthesisUpload() {
     setReviewerData(newData);
     setMatchResult(null);
     setKappaResult(null);
+    setPabakResult(null);
   }, [reviewerFiles, reviewerData]);
 
   const handleRemoveReviewer = (index) => {
@@ -43,6 +46,7 @@ export default function SynthesisUpload() {
     setReviewerData(prev => prev.filter((_, i) => i !== index));
     setMatchResult(null);
     setKappaResult(null);
+    setPabakResult(null);
   };
 
   const handleMatch = useCallback(() => {
@@ -64,12 +68,14 @@ export default function SynthesisUpload() {
           const r1 = result.matched.map(m => m.decisions[0].decision);
           const r2 = result.matched.map(m => m.decisions[1].decision);
           setKappaResult(calculateKappa(r1, r2));
+          setPabakResult(computePABAK(r1, r2));
         } else {
           const ratings = [];
           for (let ri = 0; ri < reviewerData.length; ri++) {
             ratings.push(result.matched.map(m => m.decisions[ri]?.decision || 'unknown'));
           }
           setKappaResult(calculateFleissKappa(ratings));
+          setPabakResult(null);
         }
       }
     } catch (err) {
@@ -80,17 +86,19 @@ export default function SynthesisUpload() {
   }, [reviewerData]);
 
   const recalcKappa = useCallback((matched) => {
-    if (matched.length === 0) { setKappaResult(null); return; }
+    if (matched.length === 0) { setKappaResult(null); setPabakResult(null); return; }
     if (reviewerData.length === 2) {
       const r1 = matched.map(m => m.decisions[0].decision);
       const r2 = matched.map(m => m.decisions[1].decision);
       setKappaResult(calculateKappa(r1, r2));
+      setPabakResult(computePABAK(r1, r2));
     } else {
       const ratings = [];
       for (let ri = 0; ri < reviewerData.length; ri++) {
         ratings.push(matched.map(m => m.decisions[ri]?.decision || 'unknown'));
       }
       setKappaResult(calculateFleissKappa(ratings));
+      setPabakResult(null);
     }
   }, [reviewerData]);
 
@@ -133,7 +141,11 @@ export default function SynthesisUpload() {
 
     const conflicts = matchResult.matched.filter(m => {
       const decisions = m.decisions.map(d => d.decision);
-      return !decisions.every(d => d === decisions[0]);
+      // All agree = no conflict
+      if (decisions.every(d => d === decisions[0])) return false;
+      // If ANY reviewer included, auto-resolve as include (not a conflict)
+      if (decisions.some(d => d === 'include')) return false;
+      return true;
     });
 
     if (conflicts.length === 0) {
@@ -182,9 +194,20 @@ export default function SynthesisUpload() {
       });
 
       const allSame = m.decisions.every(d => d.decision === m.decisions[0].decision);
-      row.agreement = allSame ? 'yes' : 'no';
-      row.final_decision = allSame ? m.decisions[0].decision : '';
-      row.resolved_by = allSame ? 'agreement' : '';
+      const anyInclude = m.decisions.some(d => d.decision === 'include');
+      if (allSame) {
+        row.agreement = 'yes';
+        row.final_decision = m.decisions[0].decision;
+        row.resolved_by = 'agreement';
+      } else if (anyInclude) {
+        row.agreement = 'no';
+        row.final_decision = 'include';
+        row.resolved_by = 'auto-include';
+      } else {
+        row.agreement = 'no';
+        row.final_decision = '';
+        row.resolved_by = '';
+      }
 
       return row;
     });
@@ -203,7 +226,9 @@ export default function SynthesisUpload() {
 
   const conflicts = matchResult?.matched.filter(m => {
     const decisions = m.decisions.map(d => d.decision);
-    return !decisions.every(d => d === decisions[0]);
+    if (decisions.every(d => d === decisions[0])) return false;
+    if (decisions.some(d => d === 'include')) return false;
+    return true;
   }) || [];
 
   const agreements = matchResult ? matchResult.matched.length - conflicts.length : 0;
@@ -306,6 +331,20 @@ export default function SynthesisUpload() {
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Matching Results</h3>
+            {/* Per-reviewer article counts */}
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              {reviewerData.map((rd, i) => (
+                <span key={i}>
+                  {i > 0 && ', '}
+                  Reviewer {i + 1}: {matchResult.totalPerReviewer?.[i] ?? rd.data.length} articles
+                </span>
+              ))}
+              {' '}&rarr;{' '}
+              <span className="font-medium text-gray-900 dark:text-gray-100">{matchResult.matched.length} matched</span>
+              {(matchResult.unmatchedPerReviewer?.length ?? 0) > 0 && (
+                <span className="text-amber-600 dark:text-amber-400">, {matchResult.unmatchedPerReviewer.length} unmatched</span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-gray-500 dark:text-gray-400">Matched articles</p>
@@ -316,6 +355,27 @@ export default function SynthesisUpload() {
                 <p className="font-medium text-gray-900 dark:text-gray-100">{reviewerData.length}</p>
               </div>
             </div>
+            {/* Expandable unmatched articles list */}
+            {matchResult.unmatchedPerReviewer && matchResult.unmatchedPerReviewer.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <button
+                  onClick={() => setShowUnmatched(prev => !prev)}
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  {showUnmatched ? 'Hide' : 'Show'} {matchResult.unmatchedPerReviewer.length} unmatched article{matchResult.unmatchedPerReviewer.length !== 1 ? 's' : ''}
+                </button>
+                {showUnmatched && (
+                  <ul className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                    {matchResult.unmatchedPerReviewer.map((item, i) => (
+                      <li key={i} className="text-xs text-gray-600 dark:text-gray-400 flex gap-2">
+                        <span className="shrink-0 font-medium text-gray-500 dark:text-gray-500">R{item.reviewerIndex + 1}</span>
+                        <span className="truncate">{item.articleTitle}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           {kappaResult && kappaResult.kappa !== null && (
@@ -333,6 +393,14 @@ export default function SynthesisUpload() {
                 }`}>
                   {kappaResult.interpretation}
                 </p>
+                {pabakResult && pabakResult.pabak !== null && (
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      PABAK: {pabakResult.pabak.toFixed(2)}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">(prevalence-adjusted)</span>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs text-center">
                 <div>

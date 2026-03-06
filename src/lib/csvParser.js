@@ -26,9 +26,18 @@ export function parseCSVFile(file) {
   });
 }
 
-export async function importArticlesToDB(projectId, data, mapping, onProgress) {
+export async function importArticlesToDB(projectId, data, mapping, onProgress, filterIncludedOnly = false) {
+  // For abstract screening from reconciled CSV: only import included articles
+  let filteredData = data;
+  if (filterIncludedOnly) {
+    filteredData = data.filter(row => {
+      const finalDecision = (row.final_decision || row.screening_decision || '').toLowerCase().trim();
+      return finalDecision === 'include' || finalDecision === 'maybe';
+    });
+  }
+
   const batchSize = 500;
-  const total = data.length;
+  const total = filteredData.length;
 
   // Generate randomized screening order
   const indices = Array.from({ length: total }, (_, i) => i);
@@ -42,7 +51,7 @@ export async function importArticlesToDB(projectId, data, mapping, onProgress) {
     const end = Math.min(i + batchSize, total);
 
     for (let j = i; j < end; j++) {
-      const row = data[indices[j]];
+      const row = filteredData[indices[j]];
       const article = applyMapping(row, mapping);
       batch.push({
         projectId,

@@ -243,8 +243,35 @@ export function matchReviewers(reviewerDatasets) {
   });
 
   // Collect unmatched from each reviewer
-  const anchorMatchedIdxs = new Set(matched.map((_, i) => i));
-  // For simplicity, unmatched tracking is basic — full implementation would track per-reviewer
+  // Track which anchor indices were matched
+  const anchorMatchedTitles = new Set(matched.map(m => normalizeTitle(m.title)));
+  const unmatchedPerReviewer = [];
 
-  return { matched, fuzzyPending, totalPerReviewer: reviewerDatasets.map(r => r.data.length) };
+  // Unmatched from anchor (reviewer 0)
+  anchor.data.forEach((row, idx) => {
+    const title = normalizeTitle(getTitle(row));
+    if (!anchorMatchedTitles.has(title)) {
+      unmatchedPerReviewer.push({
+        reviewerIndex: 0,
+        articleTitle: getTitle(row) || `Row ${idx + 1}`,
+        reason: 'no match found',
+      });
+    }
+  });
+
+  // Unmatched from other reviewers
+  for (let oi = 0; oi < others.length; oi++) {
+    const idx = otherIndices[oi];
+    others[oi].data.forEach((row, rowIdx) => {
+      if (!idx.used.has(rowIdx)) {
+        unmatchedPerReviewer.push({
+          reviewerIndex: oi + 1,
+          articleTitle: getTitle(row) || `Row ${rowIdx + 1}`,
+          reason: 'no match found',
+        });
+      }
+    });
+  }
+
+  return { matched, fuzzyPending, totalPerReviewer: reviewerDatasets.map(r => r.data.length), unmatchedPerReviewer };
 }

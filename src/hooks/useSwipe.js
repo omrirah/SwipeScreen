@@ -1,65 +1,22 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
-export function useSwipe({ screeningPhase, currentIndex, canInteract = true, onSwipe, onUndo }) {
+export function useSwipe({ currentIndex, canInteract = true, onSwipe, onUndo }) {
   const cardRef = useRef(null);
-  const [canSwipe, setCanSwipe] = useState(false);
-  const [stampDirection, setStampDirection] = useState(null);
-  const [timeProgress, setTimeProgress] = useState(0);
-  const timerRef = useRef(null);
-  const progressRef = useRef(null);
-
-  const minTime = screeningPhase === 'title' ? 1500 : 4000;
-
-  // Minimum display time enforcement
-  useEffect(() => {
-    setCanSwipe(false);
-    setStampDirection(null);
-    setTimeProgress(0);
-
-    const startTime = Date.now();
-
-    progressRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / minTime, 1);
-      setTimeProgress(progress);
-      if (progress >= 1) {
-        clearInterval(progressRef.current);
-      }
-    }, 50);
-
-    timerRef.current = setTimeout(() => {
-      setCanSwipe(true);
-    }, minTime);
-
-    return () => {
-      clearTimeout(timerRef.current);
-      clearInterval(progressRef.current);
-    };
-  }, [currentIndex, minTime]);
 
   const triggerSwipe = useCallback((direction) => {
-    if (!canSwipe || !canInteract) return;
+    if (!canInteract) return;
     if (cardRef.current) {
       cardRef.current.swipe(direction);
     }
-  }, [canSwipe, canInteract]);
+  }, [canInteract]);
 
   const handleSwipe = useCallback((direction) => {
     if (onSwipe) onSwipe(direction);
   }, [onSwipe]);
 
-  const handleSwipeFulfilled = useCallback((direction) => {
-    setStampDirection(direction);
-  }, []);
-
-  const handleSwipeUnfulfilled = useCallback(() => {
-    setStampDirection(null);
-  }, []);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't handle if user is typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
         return;
       }
@@ -98,13 +55,7 @@ export function useSwipe({ screeningPhase, currentIndex, canInteract = true, onS
 
   return {
     cardRef,
-    canSwipe,
-    stampDirection,
-    timeProgress,
-    minTime,
     handleSwipe,
-    handleSwipeFulfilled,
-    handleSwipeUnfulfilled,
     triggerSwipe,
   };
 }

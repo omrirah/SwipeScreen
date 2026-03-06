@@ -125,6 +125,38 @@ export function calculateFleissKappa(ratings) {
   };
 }
 
+/**
+ * Calculate PABAK (Prevalence-Adjusted Bias-Adjusted Kappa).
+ * PABAK = 2 * Po - 1
+ * where Po is the observed proportion of agreement.
+ * @param {string[]} rater1 - Decisions from rater 1
+ * @param {string[]} rater2 - Decisions from rater 2
+ * @returns {{ pabak: number|null, po: number, interpretation: string, n: number }}
+ */
+export function computePABAK(rater1, rater2) {
+  if (rater1.length !== rater2.length) {
+    throw new Error('Rater arrays must have equal length');
+  }
+
+  const n = rater1.length;
+  if (n === 0) return { pabak: null, po: 0, interpretation: 'N/A', n: 0 };
+
+  let agreements = 0;
+  for (let i = 0; i < n; i++) {
+    if (rater1[i] === rater2[i]) agreements++;
+  }
+
+  const po = agreements / n;
+  const pabak = 2 * po - 1;
+
+  return {
+    pabak: Math.round(pabak * 1000) / 1000,
+    po: Math.round(po * 1000) / 1000,
+    interpretation: interpretKappa(pabak),
+    n,
+  };
+}
+
 function interpretKappa(kappa) {
   if (kappa === null) return 'N/A';
   if (kappa < 0) return 'Poor (less than chance)';

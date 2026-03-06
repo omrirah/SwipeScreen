@@ -228,6 +228,14 @@ export default function ConflictResolution() {
           </button>
         </div>
 
+        {/* Save progress */}
+        <button
+          onClick={handleExportReconciled}
+          className="w-full py-2 mt-3 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+        >
+          Save progress (download CSV)
+        </button>
+
         {/* Navigation */}
         <div className="flex justify-between mt-4">
           <button

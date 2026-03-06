@@ -1,3 +1,5 @@
+import { useRef, useCallback } from 'react';
+
 const CARD_COLORS = [
   '#FFDAB9', // soft peach
   '#E6E6FA', // lavender
@@ -20,19 +22,30 @@ const DARK_CARD_COLORS = [
   '#1f3d2e', // dark sage
 ];
 
-export default function SwipeCard({ article, screeningPhase, stampDirection, index = 0 }) {
+export default function SwipeCard({ article, screeningPhase, index = 0 }) {
   if (!article) return null;
 
   const colorIndex = index % CARD_COLORS.length;
   const bgColor = CARD_COLORS[colorIndex];
   const darkBgColor = DARK_CARD_COLORS[colorIndex];
 
+  const abstractRef = useRef(null);
+
+  // Prevent swipe gesture from interfering with abstract scrolling
+  const handleTouchStart = useCallback((e) => {
+    const el = abstractRef.current;
+    if (!el) return;
+    if (el.scrollHeight > el.clientHeight) {
+      e.stopPropagation();
+    }
+  }, []);
+
   return (
     <div
-      className="w-full max-w-[600px] rounded-2xl shadow-lg p-6 select-none relative overflow-hidden"
+      className="w-full max-w-[600px] rounded-2xl shadow-lg p-5 select-none relative overflow-hidden flex flex-col"
       style={{
         backgroundColor: bgColor,
-        minHeight: screeningPhase === 'abstract' ? '400px' : '200px',
+        minHeight: screeningPhase === 'abstract' ? '300px' : '160px',
       }}
     >
       {/* Dark mode overlay */}
@@ -41,32 +54,25 @@ export default function SwipeCard({ article, screeningPhase, stampDirection, ind
         style={{ backgroundColor: darkBgColor }}
       />
 
-      {/* Stamp overlays */}
-      {stampDirection === 'right' && (
-        <div className="absolute top-8 left-4 -rotate-12 border-4 border-green-500 text-green-500 text-3xl font-bold px-4 py-2 rounded-lg opacity-70 z-10 pointer-events-none">
-          INCLUDE
-        </div>
-      )}
-      {stampDirection === 'left' && (
-        <div className="absolute top-8 right-4 rotate-12 border-4 border-red-500 text-red-500 text-3xl font-bold px-4 py-2 rounded-lg opacity-70 z-10 pointer-events-none">
-          EXCLUDE
-        </div>
-      )}
-      {stampDirection === 'up' && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 border-4 border-yellow-500 text-yellow-500 text-3xl font-bold px-4 py-2 rounded-lg opacity-70 z-10 pointer-events-none">
-          MAYBE
-        </div>
-      )}
-
-      <div className="relative z-[1]">
+      {/* Content */}
+      <div className="relative z-[1] flex flex-col flex-1 min-h-0">
         {/* Title */}
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-snug mb-3">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-snug mb-2 shrink-0">
           {article.title || 'Untitled'}
         </h2>
 
-        {/* Abstract (only in abstract screening mode) */}
+        {/* Abstract (only in abstract screening mode) — fills available space */}
         {screeningPhase === 'abstract' && article.abstract && (
-          <div className="abstract-scroll overflow-y-auto max-h-[300px] mb-3 -webkit-overflow-scrolling-touch">
+          <div
+            ref={abstractRef}
+            className="flex-1 overflow-y-auto mb-2 min-h-0"
+            style={{
+              maxHeight: 'calc(100dvh - 320px)',
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-y',
+            }}
+            onTouchStart={handleTouchStart}
+          >
             <p className="text-[15px] text-gray-700 dark:text-gray-300 leading-relaxed">
               {article.abstract}
             </p>
@@ -74,15 +80,39 @@ export default function SwipeCard({ article, screeningPhase, stampDirection, ind
         )}
 
         {/* Metadata footer */}
-        <div className="mt-auto pt-3 border-t border-black/10 dark:border-white/10 space-y-1">
+        <div className="mt-auto pt-2 border-t border-black/10 dark:border-white/10 space-y-1 shrink-0">
           {article.authors && (
             <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
               {article.authors}
             </p>
           )}
-          <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-500">
+          <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
             {article.year && <span>{article.year}</span>}
             {article.journal && <span className="truncate">{article.journal}</span>}
+            {article.doi && (
+              <a
+                href={`https://doi.org/${article.doi}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              >
+                DOI
+              </a>
+            )}
+            {article.pmid && (
+              <a
+                href={`https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              >
+                PubMed
+              </a>
+            )}
           </div>
         </div>
       </div>

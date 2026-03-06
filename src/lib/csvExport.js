@@ -39,7 +39,8 @@ export async function exportDecisionsCSV(projectId) {
     });
 
   const csv = Papa.unparse(rows);
-  const filename = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_${project.reviewerName}_${project.screeningPhase}.csv`;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_${project.reviewerName}_${project.screeningPhase}_${dateStr}.csv`;
   triggerDownload(csv, filename);
 }
 

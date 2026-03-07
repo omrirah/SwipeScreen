@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { parseCSVFile, importArticlesToDB } from '../lib/csvParser';
 import { detectDatabase, INTERNAL_FIELDS } from '../lib/columnMapper';
 import db from '../lib/db';
@@ -27,12 +27,14 @@ const DEFAULT_EXCLUSION_REASONS = [
 
 export default function ProjectSetup() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const phaseFromRoute = location.state?.phase; // 'title' or 'abstract' from HomeScreen
   const [step, setStep] = useState(1);
 
   // Step 1: Project info
   const [projectName, setProjectName] = useState('');
   const [reviewerName, setReviewerName] = useState('');
-  const [screeningPhase, setScreeningPhase] = useState('title');
+  const [screeningPhase, setScreeningPhase] = useState(phaseFromRoute || 'title');
   const [inclusionCriteria, setInclusionCriteria] = useState('');
   const [exclusionCriteria, setExclusionCriteria] = useState('');
   const [exclusionReasons, setExclusionReasons] = useState(DEFAULT_EXCLUSION_REASONS.join('\n'));
@@ -150,7 +152,9 @@ export default function ProjectSetup() {
         <button onClick={() => navigate('/')} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
           &larr; Back
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">New Project</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {phaseFromRoute === 'title' ? 'New Title Screening' : phaseFromRoute === 'abstract' ? 'New Abstract Screening' : 'New Project'}
+        </h1>
       </div>
 
       {/* Step indicators */}
@@ -196,26 +200,35 @@ export default function ProjectSetup() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Screening Phase
-            </label>
-            <div className="flex gap-3">
-              {['title', 'abstract'].map((phase) => (
-                <button
-                  key={phase}
-                  onClick={() => setScreeningPhase(phase)}
-                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                    screeningPhase === phase
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  {phase === 'title' ? 'Title Screening (Pass 1)' : 'Abstract Screening (Pass 2)'}
-                </button>
-              ))}
+          {/* Phase indicator (pre-set from home screen) or selector */}
+          {phaseFromRoute ? (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                {screeningPhase === 'title' ? '📋 Title Screening (Pass 1)' : '📄 Abstract Screening (Pass 2)'}
+              </p>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Screening Phase
+              </label>
+              <div className="flex gap-3">
+                {['title', 'abstract'].map((phase) => (
+                  <button
+                    key={phase}
+                    onClick={() => setScreeningPhase(phase)}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                      screeningPhase === phase
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    {phase === 'title' ? 'Title Screening (Pass 1)' : 'Abstract Screening (Pass 2)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {screeningPhase === 'abstract' && (
             <>

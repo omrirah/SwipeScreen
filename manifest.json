@@ -1,0 +1,16 @@
+{
+  "name": "SwipeScreen",
+  "short_name": "SwipeScreen",
+  "description": "Systematic review screening with swipe gestures",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#FAF9F6",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

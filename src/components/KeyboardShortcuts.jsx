@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 
 const shortcuts = [
-  { keys: ['\u2192', 'K'], action: 'Include (accept)' },
-  { keys: ['\u2190', 'J'], action: 'Exclude (reject)' },
-  { keys: ['\u2191', 'M'], action: 'Maybe (unsure)' },
+  { keys: ['\u2192', 'K'], action: 'Yes (include)' },
+  { keys: ['\u2190', 'J'], action: 'No (exclude)' },
+  { keys: ['\u2191', 'M'], action: 'Maybe' },
   { keys: ['Ctrl+Z'], action: 'Undo last decision' },
   { keys: ['?'], action: 'Show/hide shortcuts' },
   { keys: ['Esc'], action: 'Back to home' },

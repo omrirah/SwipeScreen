@@ -43,6 +43,7 @@ export default function HomeScreen({ darkMode, setDarkMode }) {
 
       const projectId = await db.projects.add({
         ...project,
+        totalArticles: articles.length,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });

@@ -31,6 +31,9 @@ export default function ScreeningView() {
   const [showCriteria, setShowCriteria] = useState(false);
   const [pendingExclude, setPendingExclude] = useState(null);
   const [announcement, setAnnouncement] = useState('');
+  const [saveStatus, setSaveStatus] = useState(null);
+  const decisionInFlightRef = useRef(false);
+  const navigatedToResultsRef = useRef(false);
 
   const isAbstractMode = project?.screeningPhase === 'abstract';
 
@@ -51,8 +54,17 @@ export default function ScreeningView() {
     if (topGlowRef.current)   topGlowRef.current.style.opacity   = '0';
   }, []);
 
+  // Re-arm the decision guard whenever a new card is shown
+  useEffect(() => {
+    decisionInFlightRef.current = false;
+  }, [currentIndex]);
+
   // ── Core decision handler (used by both swipe and button paths) ──
+  // The in-flight guard prevents a double click / double keypress from
+  // recording two decisions for the same card and silently skipping the next.
   const handleSwipeAction = useCallback((direction) => {
+    if (decisionInFlightRef.current) return;
+    decisionInFlightRef.current = true;
     hideGlows();
     const timeOnCard = getTimeOnCard();
 
@@ -92,6 +104,7 @@ export default function ScreeningView() {
   const handleUndo = useCallback(() => {
     setShowExclusionPicker(false);
     setPendingExclude(null);
+    decisionInFlightRef.current = false;
     hideGlows();
     undoLastDecision();
   }, [undoLastDecision, hideGlows]);
@@ -99,9 +112,12 @@ export default function ScreeningView() {
   const handleSaveProgress = useCallback(async () => {
     try {
       await exportProgressJSON(Number(id));
+      setSaveStatus('saved');
     } catch (err) {
       console.error('Save progress failed:', err);
+      setSaveStatus('error');
     }
+    setTimeout(() => setSaveStatus(null), 2000);
   }, [id]);
 
   // ── Button handler: abstract mode calls decision directly, title mode triggers TinderCard ──
@@ -139,6 +155,7 @@ export default function ScreeningView() {
         } else {
           navigate('/');
         }
+        return;
       }
       if (showExclusionPicker && e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key) - 1;
@@ -152,9 +169,10 @@ export default function ScreeningView() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigate, showExclusionPicker, project, handleExclusionReasonSelected, handleSkipExclusionReason]);
 
-  // Navigate to results when complete
+  // Navigate to results when complete (once)
   useEffect(() => {
-    if (isComplete && !loading) {
+    if (isComplete && !loading && !navigatedToResultsRef.current) {
+      navigatedToResultsRef.current = true;
       navigate(`/project/${id}/results`);
     }
   }, [isComplete, loading, id, navigate]);
@@ -227,10 +245,16 @@ export default function ScreeningView() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveProgress}
-              className="text-sm px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+              className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                saveStatus === 'saved'
+                  ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                  : saveStatus === 'error'
+                    ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                    : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+              }`}
               aria-label="Save progress"
             >
-              Save
+              {saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'error' ? '✗ Error' : 'Save'}
             </button>
             <button
               onClick={handleUndo}

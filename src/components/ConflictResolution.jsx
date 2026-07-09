@@ -70,8 +70,13 @@ export default function ConflictResolution() {
 
       const allSame = m.decisions.every(d => d.decision === m.decisions[0].decision);
 
-      // Check if this article had a conflict that was resolved
-      const conflict = conflicts.find(c => c.title === m.title || c.doi === m.doi);
+      // Check if this article had a conflict that was resolved.
+      // Match keys must be non-empty: with `c.doi === m.doi` alone, two
+      // articles that both lack a DOI would cross-match.
+      const conflict = conflicts.find(c =>
+        (c.title && c.title === m.title) || (c.doi && m.doi && c.doi === m.doi)
+      );
+      const anyInclude = m.decisions.some(d => d.decision === 'include');
 
       if (conflict && conflict.resolvedDecision) {
         row.agreement = 'no';
@@ -81,6 +86,10 @@ export default function ConflictResolution() {
         row.agreement = 'yes';
         row.final_decision = m.decisions[0].decision;
         row.resolved_by = 'agreement';
+      } else if (anyInclude) {
+        row.agreement = 'no';
+        row.final_decision = 'include';
+        row.resolved_by = 'auto-include';
       } else {
         row.agreement = 'no';
         row.final_decision = '';
@@ -198,8 +207,14 @@ export default function ConflictResolution() {
           </div>
 
           {currentConflict.resolvedDecision && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-700 dark:text-blue-300">
-              Resolved: <strong className="capitalize">{currentConflict.resolvedDecision}</strong>
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+              <span className="font-medium">Current decision:</span>
+              <span className={`px-2 py-0.5 rounded-full text-sm font-bold capitalize ${DECISION_COLORS[currentConflict.resolvedDecision]}`}>
+                {currentConflict.resolvedDecision}
+              </span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
+                Tap below to change
+              </span>
             </div>
           )}
         </div>
@@ -210,21 +225,33 @@ export default function ConflictResolution() {
         <div className="flex gap-3">
           <button
             onClick={() => handleResolve('exclude')}
-            className="flex-1 py-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-xl font-medium hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+            className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+              currentConflict.resolvedDecision === 'exclude'
+                ? 'bg-red-500 text-white'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+            }`}
           >
-            Exclude
+            {currentConflict.resolvedDecision && currentConflict.resolvedDecision !== 'exclude' ? 'Change to Exclude' : 'Exclude'}
           </button>
           <button
             onClick={() => handleResolve('maybe')}
-            className="flex-1 py-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-xl font-medium hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+            className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+              currentConflict.resolvedDecision === 'maybe'
+                ? 'bg-yellow-500 text-white'
+                : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
+            }`}
           >
-            Maybe
+            {currentConflict.resolvedDecision && currentConflict.resolvedDecision !== 'maybe' ? 'Change to Maybe' : 'Maybe'}
           </button>
           <button
             onClick={() => handleResolve('include')}
-            className="flex-1 py-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-xl font-medium hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+            className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+              currentConflict.resolvedDecision === 'include'
+                ? 'bg-green-500 text-white'
+                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+            }`}
           >
-            Include
+            {currentConflict.resolvedDecision && currentConflict.resolvedDecision !== 'include' ? 'Change to Include' : 'Include'}
           </button>
         </div>
 

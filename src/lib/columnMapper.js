@@ -53,7 +53,13 @@ const DATABASE_SIGNATURES = {
   embase: {
     detect: (headers) =>
       headers.some(h => h.toLowerCase().includes('embase')) ||
-      (headers.some(h => h === 'Title') && headers.some(h => h === 'Source')),
+      (headers.some(h => h === 'Title') &&
+        headers.some(h => h === 'Source') &&
+        !headers.some(h => h.toLowerCase().includes('cochrane')) &&
+        !headers.some(h => h === 'PMID') &&
+        !headers.some(h => h === 'EID') &&
+        !headers.some(h => h === 'Article Title') &&
+        !headers.some(h => h === 'UT (Unique WOS ID)')),
     mapping: {
       title: 'Title',
       abstract: 'Abstract',
@@ -67,7 +73,14 @@ const DATABASE_SIGNATURES = {
   cochrane: {
     detect: (headers) =>
       headers.some(h => h.toLowerCase().includes('cochrane')) ||
-      (headers.some(h => h === 'Title') && headers.some(h => h === 'Source') && headers.some(h => h === 'Year')),
+      (headers.some(h => h === 'Title') &&
+        headers.some(h => h === 'Source') &&
+        headers.some(h => h === 'Year') &&
+        !headers.some(h => h.toLowerCase().includes('embase')) &&
+        !headers.some(h => h === 'PMID') &&
+        !headers.some(h => h === 'EID') &&
+        !headers.some(h => h === 'Article Title') &&
+        !headers.some(h => h === 'UT (Unique WOS ID)')),
     mapping: {
       title: 'Title',
       abstract: 'Abstract',

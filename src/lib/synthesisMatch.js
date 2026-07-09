@@ -153,7 +153,6 @@ export function matchReviewers(reviewerDatasets) {
     const anchorTitleRaw = getTitle(anchorRow);
 
     const otherMatches = [];
-    let allMatched = true;
 
     for (let oi = 0; oi < others.length; oi++) {
       const idx = otherIndices[oi];
@@ -182,8 +181,6 @@ export function matchReviewers(reviewerDatasets) {
         idx.used.add(matchIdx);
         otherMatches.push({ reviewerIndex: oi + 1, rowIndex: matchIdx, matchedBy });
       } else {
-        allMatched = false;
-
         // Try fuzzy title match
         if (anchorTitle) {
           let bestMatch = -1;
@@ -217,7 +214,7 @@ export function matchReviewers(reviewerDatasets) {
       }
     }
 
-    if (allMatched && otherMatches.length === others.length) {
+    if (otherMatches.length > 0) {
       const pair = {
         title: anchorTitleRaw,
         doi: getDOI(anchorRow),
@@ -226,6 +223,8 @@ export function matchReviewers(reviewerDatasets) {
         ],
         rawRows: [anchorRow],
         matchedBy: otherMatches.map(m => m.matchedBy),
+        matchedReviewerCount: 1 + otherMatches.length,
+        isPartialMatch: otherMatches.length < others.length,
       };
 
       for (const om of otherMatches) {

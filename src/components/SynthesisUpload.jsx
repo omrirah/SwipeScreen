@@ -63,16 +63,18 @@ export default function SynthesisUpload() {
       setMatchResult(result);
       setFuzzyPending(result.fuzzyPending || []);
 
-      if (result.matched.length > 0) {
+      // Agreement stats only over articles matched across ALL reviewers
+      const fullMatches = result.matched.filter(m => !m.isPartialMatch);
+      if (fullMatches.length > 0) {
         if (reviewerData.length === 2) {
-          const r1 = result.matched.map(m => m.decisions[0].decision);
-          const r2 = result.matched.map(m => m.decisions[1].decision);
+          const r1 = fullMatches.map(m => m.decisions[0].decision);
+          const r2 = fullMatches.map(m => m.decisions[1].decision);
           setKappaResult(calculateKappa(r1, r2));
           setPabakResult(computePABAK(r1, r2));
         } else {
           const ratings = [];
           for (let ri = 0; ri < reviewerData.length; ri++) {
-            ratings.push(result.matched.map(m => m.decisions[ri]?.decision || 'unknown'));
+            ratings.push(fullMatches.map(m => m.decisions[ri]?.decision || 'unknown'));
           }
           setKappaResult(calculateFleissKappa(ratings));
           setPabakResult(null);
@@ -86,16 +88,17 @@ export default function SynthesisUpload() {
   }, [reviewerData]);
 
   const recalcKappa = useCallback((matched) => {
-    if (matched.length === 0) { setKappaResult(null); setPabakResult(null); return; }
+    const fullMatches = matched.filter(m => !m.isPartialMatch);
+    if (fullMatches.length === 0) { setKappaResult(null); setPabakResult(null); return; }
     if (reviewerData.length === 2) {
-      const r1 = matched.map(m => m.decisions[0].decision);
-      const r2 = matched.map(m => m.decisions[1].decision);
+      const r1 = fullMatches.map(m => m.decisions[0].decision);
+      const r2 = fullMatches.map(m => m.decisions[1].decision);
       setKappaResult(calculateKappa(r1, r2));
       setPabakResult(computePABAK(r1, r2));
     } else {
       const ratings = [];
       for (let ri = 0; ri < reviewerData.length; ri++) {
-        ratings.push(matched.map(m => m.decisions[ri]?.decision || 'unknown'));
+        ratings.push(fullMatches.map(m => m.decisions[ri]?.decision || 'unknown'));
       }
       setKappaResult(calculateFleissKappa(ratings));
       setPabakResult(null);
@@ -108,22 +111,56 @@ export default function SynthesisUpload() {
 
     // Build a matched pair from the fuzzy match
     const anchorRow = reviewerData[0].data[fp.anchorIdx];
-    const otherRow = reviewerData[fp.otherReviewerIndex].data[fp.otherRowIndex];
     const getDecision = (row) => (row.screening_decision || row.decision || '').toLowerCase().trim();
     const getReason = (row) => row.exclusion_reason || row.exclusionReason || '';
     const getTitle = (row) => row.Title || row.title || row['Article Title'] || '';
     const getDOI = (row) => row.DOI || row.doi || '';
+    const normTitle = (t) => (t || '').toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
 
-    // For 2-reviewer case, build the matched pair directly
+    const decisions = [
+      { reviewer: reviewerData[0].reviewerName, decision: getDecision(anchorRow), reason: getReason(anchorRow) },
+    ];
+    const rawRows = [anchorRow];
+
+    // Collect the fuzzy-confirmed row plus any exact matches in remaining reviewers
+    for (let ri = 1; ri < reviewerData.length; ri++) {
+      let row = null;
+      if (ri === fp.otherReviewerIndex) {
+        row = reviewerData[ri].data[fp.otherRowIndex];
+      } else {
+        const anchorDOI = (getDOI(anchorRow) || '').toLowerCase().trim();
+        const anchorTitle = normTitle(getTitle(anchorRow));
+        for (const candidate of reviewerData[ri].data) {
+          const candDOI = (getDOI(candidate) || '').toLowerCase().trim();
+          if (anchorDOI && candDOI && candDOI === anchorDOI) {
+            row = candidate;
+            break;
+          }
+          const candTitle = normTitle(getTitle(candidate));
+          if (anchorTitle && candTitle && candTitle === anchorTitle) {
+            row = candidate;
+            break;
+          }
+        }
+      }
+      if (row) {
+        decisions.push({
+          reviewer: reviewerData[ri].reviewerName,
+          decision: getDecision(row),
+          reason: getReason(row),
+        });
+        rawRows.push(row);
+      }
+    }
+
     const newMatch = {
       title: getTitle(anchorRow),
       doi: getDOI(anchorRow),
-      decisions: [
-        { reviewer: reviewerData[0].reviewerName, decision: getDecision(anchorRow), reason: getReason(anchorRow) },
-        { reviewer: reviewerData[fp.otherReviewerIndex].reviewerName, decision: getDecision(otherRow), reason: getReason(otherRow) },
-      ],
-      rawRows: [anchorRow, otherRow],
+      decisions,
+      rawRows,
       matchedBy: ['Title (fuzzy)'],
+      matchedReviewerCount: decisions.length,
+      isPartialMatch: decisions.length < reviewerData.length,
     };
 
     const updatedMatched = [...matchResult.matched, newMatch];
@@ -224,6 +261,27 @@ export default function SynthesisUpload() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadUnmatched = () => {
+    if (!matchResult?.unmatchedPerReviewer?.length) return;
+
+    const rows = matchResult.unmatchedPerReviewer.map(u => ({
+      reviewer: reviewerData[u.reviewerIndex]?.reviewerName || `Reviewer ${u.reviewerIndex + 1}`,
+      article_title: u.articleTitle,
+      reason: u.reason,
+    }));
+
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'unmatched_articles.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const conflicts = matchResult?.matched.filter(m => {
     const decisions = m.decisions.map(d => d.decision);
     if (decisions.every(d => d === decisions[0])) return false;
@@ -231,7 +289,15 @@ export default function SynthesisUpload() {
     return true;
   }) || [];
 
-  const agreements = matchResult ? matchResult.matched.length - conflicts.length : 0;
+  const autoIncluded = matchResult?.matched.filter(m => {
+    const decisions = m.decisions.map(d => d.decision);
+    if (decisions.every(d => d === decisions[0])) return false;
+    return decisions.some(d => d === 'include');
+  }) || [];
+
+  const partialMatches = matchResult?.matched.filter(m => m.isPartialMatch) || [];
+
+  const agreements = matchResult ? matchResult.matched.length - conflicts.length - autoIncluded.length : 0;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -421,16 +487,25 @@ export default function SynthesisUpload() {
 
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Agreement</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
                 <p className="text-xl font-bold text-green-600 dark:text-green-400">{agreements}</p>
                 <p className="text-xs text-green-600 dark:text-green-400">Agreed</p>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{autoIncluded.length}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400">Auto-included</p>
               </div>
               <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
                 <p className="text-xl font-bold text-red-600 dark:text-red-400">{conflicts.length}</p>
                 <p className="text-xs text-red-600 dark:text-red-400">Conflicts</p>
               </div>
             </div>
+            {partialMatches.length > 0 && (
+              <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                ⚠ {partialMatches.length} article{partialMatches.length !== 1 ? 's' : ''} only partially matched (not all reviewers found)
+              </p>
+            )}
           </div>
 
           {/* Confusion matrix for 2 reviewers */}
@@ -481,6 +556,14 @@ export default function SynthesisUpload() {
             >
               Download Reconciled CSV
             </button>
+            {(matchResult?.unmatchedPerReviewer?.length ?? 0) > 0 && (
+              <button
+                onClick={handleDownloadUnmatched}
+                className="w-full py-3 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-xl font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+              >
+                Download Unmatched ({matchResult.unmatchedPerReviewer.length} articles)
+              </button>
+            )}
           </div>
         </div>
       )}

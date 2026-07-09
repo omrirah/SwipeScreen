@@ -127,8 +127,11 @@ export function calculateFleissKappa(ratings) {
 
 /**
  * Calculate PABAK (Prevalence-Adjusted Bias-Adjusted Kappa).
- * PABAK = 2 * Po - 1
- * where Po is the observed proportion of agreement.
+ * PABAK = (k * Po - 1) / (k - 1)
+ * where Po is the observed proportion of agreement and k the number of
+ * observed decision categories. Reduces to the classic 2*Po - 1
+ * (Byrt et al. 1993) for binary decisions; the k-category form is
+ * needed when 'maybe' appears alongside include/exclude.
  * @param {string[]} rater1 - Decisions from rater 1
  * @param {string[]} rater2 - Decisions from rater 2
  * @returns {{ pabak: number|null, po: number, interpretation: string, n: number }}
@@ -147,7 +150,8 @@ export function computePABAK(rater1, rater2) {
   }
 
   const po = agreements / n;
-  const pabak = 2 * po - 1;
+  const k = Math.max(2, new Set([...rater1, ...rater2]).size);
+  const pabak = (k * po - 1) / (k - 1);
 
   return {
     pabak: Math.round(pabak * 1000) / 1000,

@@ -134,6 +134,15 @@ export default function ProjectSetup() {
         setImportProgress({ done, total });
       }, screeningPhase === 'abstract');
 
+      if (importedCount === 0) {
+        await db.projects.delete(projectId);
+        setParseError(
+          'No included articles found in this CSV. Abstract screening expects a reconciled CSV with a final_decision (or screening_decision) column containing include/maybe values.'
+        );
+        setIsImporting(false);
+        return;
+      }
+
       // Update totalArticles to actual imported count (may differ if filtered)
       if (importedCount !== csvData.length) {
         await db.projects.update(projectId, { totalArticles: importedCount });

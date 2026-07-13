@@ -137,7 +137,7 @@ export default function ProjectSetup() {
       if (importedCount === 0) {
         await db.projects.delete(projectId);
         setParseError(
-          'No included articles found in this CSV. Abstract screening expects a reconciled CSV with a final_decision (or screening_decision) column containing include/maybe values.'
+          'This CSV has a final_decision (or screening_decision) column, but no rows are marked include or maybe, so there is nothing to screen. Fix the decision values, or remove the column to screen every row in the file.'
         );
         setIsImporting(false);
         return;

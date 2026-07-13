@@ -26,10 +26,15 @@ export function parseCSVFile(file) {
   });
 }
 
+export function hasDecisionColumn(data) {
+  return data.some(row => 'final_decision' in row || 'screening_decision' in row);
+}
+
 export async function importArticlesToDB(projectId, data, mapping, onProgress, filterIncludedOnly = false) {
-  // For abstract screening from reconciled CSV: only import included articles
+  // For abstract screening from a reconciled CSV: only import included/maybe articles.
+  // A CSV with no decision column was never reconciled — screen every row.
   let filteredData = data;
-  if (filterIncludedOnly) {
+  if (filterIncludedOnly && hasDecisionColumn(data)) {
     filteredData = data.filter(row => {
       const finalDecision = (row.final_decision || row.screening_decision || '').toLowerCase().trim();
       return finalDecision === 'include' || finalDecision === 'maybe';

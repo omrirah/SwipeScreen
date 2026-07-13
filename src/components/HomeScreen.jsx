@@ -278,7 +278,7 @@ export default function HomeScreen({ darkMode, setDarkMode }) {
                 Abstract Screening
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Screen included articles by abstract. Upload reconciled CSV from synthesis.
+                Screen articles by abstract. Upload a reconciled CSV from synthesis, or any full article list.
               </p>
               <div className="flex gap-2 mt-3">
                 <Link

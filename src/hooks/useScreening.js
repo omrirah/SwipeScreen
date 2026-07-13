@@ -61,7 +61,7 @@ export function useScreening(projectId) {
   const isComplete = project && currentIndex !== null && currentIndex >= (project.totalArticles || 0);
 
   const saveDecision = useCallback(async (decision, exclusionReason, timeOnCardMs) => {
-    if (!project || !currentArticle) return;
+    if (!project || !currentArticle) return null;
 
     const decisionRecord = {
       projectId: id,
@@ -74,21 +74,30 @@ export function useScreening(projectId) {
       timeOnCardMs: timeOnCardMs || (Date.now() - cardShownAtRef.current),
     };
 
-    await db.transaction('rw', [db.decisions, db.projects], async () => {
-      const decisionId = await db.decisions.add(decisionRecord);
+    const decisionId = await db.transaction('rw', [db.decisions, db.projects], async () => {
+      const newDecisionId = await db.decisions.add(decisionRecord);
       await db.projects.update(id, {
         currentIndex: currentIndex + 1,
         updatedAt: Date.now(),
       });
 
       setUndoStack(prev => {
-        const stack = [...prev, { decisionId, articleId: currentArticle.id, index: currentIndex }];
+        const stack = [...prev, { decisionId: newDecisionId, articleId: currentArticle.id, index: currentIndex }];
         return stack.slice(-MAX_UNDO);
       });
+
+      return newDecisionId;
     });
 
     setCurrentIndex(prev => prev + 1);
+    return decisionId;
   }, [project, currentArticle, id, currentIndex]);
+
+  // Attach (or change) an exclusion reason on an already-saved decision.
+  // Used by the optional post-exclude reason bar in abstract mode.
+  const setDecisionReason = useCallback(async (decisionId, reason) => {
+    await db.decisions.update(decisionId, { exclusionReason: reason || null });
+  }, []);
 
   const undoLastDecision = useCallback(async () => {
     if (undoStack.length === 0) return;
@@ -121,6 +130,7 @@ export function useScreening(projectId) {
     undoStack,
     decisionCounts: decisionCounts || { include: 0, exclude: 0, maybe: 0, total: 0 },
     saveDecision,
+    setDecisionReason,
     undoLastDecision,
     getTimeOnCard,
     cardShownAtRef,

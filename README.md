@@ -124,13 +124,19 @@ name and reviewer, you can enter:
 - **Inclusion criteria** and **Exclusion criteria** — shown in a collapsible
   "Criteria" banner while you screen, so your rules stay in front of you.
 - **Exclusion reasons** — a quick-select list. When you exclude an article, you
-  can tag it with a reason (e.g. *Wrong Population*, *Wrong Study Design*),
-  which feeds the exclusion breakdown and the PRISMA counts.
+  can *optionally* tag it with a reason (e.g. *Wrong Population*, *Wrong Study
+  Design*), which feeds the exclusion breakdown and the PRISMA counts.
 
 The abstract card is scrollable (rather than flick-to-swipe), so long abstracts
 are easy to read, and you decide with the **No / Maybe / Yes** buttons or the
-keyboard shortcuts. Excluding an article opens the exclusion-reason picker;
-press the number keys `1`–`9` to pick a reason quickly, or skip it.
+keyboard shortcuts. **Excluding never interrupts screening**: the exclude is
+saved instantly and the next abstract appears right away. If you defined
+exclusion reasons, a small panel appears below the card offering to tag the
+article you just excluded — click a reason or press the number keys `1`–`9` to
+record one, or simply keep screening (or press `Esc` / the &times; button) and
+no reason is stored. Tagging a reason is never required. If your very last
+decision is an exclude, the panel appears one final time — tag a reason or
+dismiss it, and the results screen opens.
 
 ### What Abstract Screening accepts as input
 

@@ -4,9 +4,10 @@ const shortcuts = [
   { keys: ['\u2192', 'K'], action: 'Yes (include)' },
   { keys: ['\u2190', 'J'], action: 'No (exclude)' },
   { keys: ['\u2191', 'M'], action: 'Maybe' },
+  { keys: ['1\u20139'], action: 'Tag exclusion reason \u2014 optional (abstract)' },
   { keys: ['Ctrl+Z'], action: 'Undo last decision' },
   { keys: ['?'], action: 'Show/hide shortcuts' },
-  { keys: ['Esc'], action: 'Back to home' },
+  { keys: ['Esc'], action: 'Dismiss reason bar / back to home' },
 ];
 
 export default function KeyboardShortcuts() {

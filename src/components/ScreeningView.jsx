@@ -5,7 +5,7 @@ import { useScreening } from '../hooks/useScreening';
 import { useSwipe } from '../hooks/useSwipe';
 import SwipeCard from './SwipeCard';
 import ProgressBar from './ProgressBar';
-import ExclusionReasonPicker from './ExclusionReasonPicker';
+import ExclusionReasonBar from './ExclusionReasonBar';
 import KeyboardShortcuts from './KeyboardShortcuts';
 import { exportProgressJSON } from '../lib/csvExport';
 
@@ -22,14 +22,17 @@ export default function ScreeningView() {
     undoStack,
     decisionCounts,
     saveDecision,
+    setDecisionReason,
     undoLastDecision,
     getTimeOnCard,
   } = useScreening(id);
 
-  const [showExclusionPicker, setShowExclusionPicker] = useState(false);
-  const [excludedArticleTitle, setExcludedArticleTitle] = useState('');
   const [showCriteria, setShowCriteria] = useState(false);
-  const [pendingExclude, setPendingExclude] = useState(null);
+  // Last excluded record — drives the optional, non-blocking reason bar in
+  // abstract mode. Set synchronously on exclude (decisionId arrives when the
+  // save commits; `key` ties the async id to the right exclude, and
+  // `pendingReason` holds a choice made before the id is known).
+  const [lastExclude, setLastExclude] = useState(null);
   const [announcement, setAnnouncement] = useState('');
   const [saveStatus, setSaveStatus] = useState(null);
   const decisionInFlightRef = useRef(false);
@@ -69,41 +72,60 @@ export default function ScreeningView() {
     const timeOnCard = getTimeOnCard();
 
     if (direction === 'left') {
-      if (isAbstractMode && project?.exclusionReasons?.length > 0) {
-        // Abstract mode: defer saveDecision until reason is picked or skipped
-        setExcludedArticleTitle(currentArticle?.title || 'Untitled');
-        setPendingExclude({ timeOnCard });
-        setShowExclusionPicker(true);
-        setAnnouncement('Excluded. Select an exclusion reason or skip.');
-      } else {
-        saveDecision('exclude', null, timeOnCard);
-        setAnnouncement('Excluded.');
-      }
+      // Exclude is saved immediately — the reason bar that follows is purely
+      // optional and never blocks the next card. The bar state is set
+      // synchronously (replacing any previous one) so a digit pressed right
+      // after always targets THIS exclude, never an older record.
+      const title = currentArticle?.title || 'Untitled';
+      const canTagReason = isAbstractMode && project?.exclusionReasons?.length > 0;
+      const key = currentIndex;
+      setLastExclude(canTagReason ? { key, decisionId: null, pendingReason: null, title } : null);
+      saveDecision('exclude', null, timeOnCard).then((decisionId) => {
+        if (canTagReason && decisionId != null) {
+          // Attach the saved id — only if the bar still shows this exclude
+          setLastExclude(prev => (prev && prev.key === key) ? { ...prev, decisionId } : prev);
+        }
+      });
+      const keyCount = Math.min(9, project?.exclusionReasons?.length || 0);
+      setAnnouncement(canTagReason
+        ? `Excluded. Press 1-${keyCount} to add an optional reason, or keep screening.`
+        : 'Excluded.');
     } else {
+      setLastExclude(null);
       const decision = direction === 'right' ? 'include' : 'maybe';
       saveDecision(decision, null, timeOnCard);
       setAnnouncement(direction === 'right' ? 'Included.' : 'Marked as maybe.');
     }
-  }, [saveDecision, getTimeOnCard, isAbstractMode, currentArticle, project, hideGlows]);
+  }, [saveDecision, getTimeOnCard, isAbstractMode, currentArticle, project, currentIndex, hideGlows]);
 
-  // ── Exclusion reason handling (atomic save) ──
-  const handleExclusionReasonSelected = useCallback((reason) => {
-    if (!pendingExclude) return;
-    saveDecision('exclude', reason, pendingExclude.timeOnCard);
-    setShowExclusionPicker(false);
-    setPendingExclude(null);
-  }, [pendingExclude, saveDecision]);
+  // ── Optional reason tagging for the last excluded record ──
+  const handleTagReason = useCallback((reason) => {
+    if (!lastExclude) return;
+    if (lastExclude.decisionId != null) {
+      setDecisionReason(lastExclude.decisionId, reason);
+      setLastExclude(null);
+    } else {
+      // Save still in flight — queue the choice; applied when the id arrives
+      setLastExclude({ ...lastExclude, pendingReason: reason });
+    }
+    setAnnouncement(`Exclusion reason recorded: ${reason}.`);
+  }, [lastExclude, setDecisionReason]);
 
-  const handleSkipExclusionReason = useCallback(() => {
-    if (!pendingExclude) return;
-    saveDecision('exclude', null, pendingExclude.timeOnCard);
-    setShowExclusionPicker(false);
-    setPendingExclude(null);
-  }, [pendingExclude, saveDecision]);
+  // Apply a reason that was picked before the save had committed
+  useEffect(() => {
+    if (lastExclude?.decisionId != null && lastExclude.pendingReason) {
+      setDecisionReason(lastExclude.decisionId, lastExclude.pendingReason);
+      setLastExclude(null);
+    }
+  }, [lastExclude, setDecisionReason]);
+
+  const handleDismissReasonBar = useCallback(() => {
+    setLastExclude(null);
+    setAnnouncement('Reason bar dismissed. No reason recorded.');
+  }, []);
 
   const handleUndo = useCallback(() => {
-    setShowExclusionPicker(false);
-    setPendingExclude(null);
+    setLastExclude(null);
     decisionInFlightRef.current = false;
     hideGlows();
     undoLastDecision();
@@ -137,7 +159,7 @@ export default function ScreeningView() {
     triggerSwipe,
   } = useSwipe({
     currentIndex,
-    canInteract: !loading && !!currentArticle && !showExclusionPicker,
+    canInteract: !loading && !!currentArticle,
     onSwipe: handleSwipeAction,
     onUndo: handleUndo,
   });
@@ -146,36 +168,39 @@ export default function ScreeningView() {
   const triggerSwipeRef = useRef(triggerSwipe);
   triggerSwipeRef.current = triggerSwipe;
 
-  // Handle escape key and number keys for exclusion reasons
+  // Handle escape key and number keys for the optional reason bar
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (showExclusionPicker) {
-          handleSkipExclusionReason();
+        if (lastExclude) {
+          handleDismissReasonBar();
         } else {
           navigate('/');
         }
         return;
       }
-      if (showExclusionPicker && e.key >= '1' && e.key <= '9') {
+      // Plain digits only — Ctrl/Cmd/Alt+digit are browser shortcuts
+      if (lastExclude && !e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
         const index = parseInt(e.key) - 1;
         const reasons = project?.exclusionReasons || [];
         if (index < reasons.length) {
-          handleExclusionReasonSelected(reasons[index]);
+          handleTagReason(reasons[index]);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, showExclusionPicker, project, handleExclusionReasonSelected, handleSkipExclusionReason]);
+  }, [navigate, lastExclude, project, handleTagReason, handleDismissReasonBar]);
 
-  // Navigate to results when complete (once)
+  // Navigate to results when complete (once). If the final decision was an
+  // exclude, wait for its reason bar to be tagged or dismissed first —
+  // otherwise the chance to tag the last record would be lost.
   useEffect(() => {
-    if (isComplete && !loading && !navigatedToResultsRef.current) {
+    if (isComplete && !loading && !lastExclude && !navigatedToResultsRef.current) {
       navigatedToResultsRef.current = true;
       navigate(`/project/${id}/results`);
     }
-  }, [isComplete, loading, id, navigate]);
+  }, [isComplete, loading, lastExclude, id, navigate]);
 
   // Auto-scroll to top when card changes (abstract mode)
   const scrollContainerRef = useRef(null);
@@ -268,7 +293,7 @@ export default function ScreeningView() {
         </div>
 
         <p className="text-xs text-center text-gray-400 dark:text-gray-500 mb-1">
-          Article {currentIndex + 1} of {project.totalArticles}
+          Article {Math.min(currentIndex + 1, project.totalArticles)} of {project.totalArticles}
         </p>
 
         <ProgressBar
@@ -333,6 +358,13 @@ export default function ScreeningView() {
                 index={currentIndex}
               />
             )}
+            {!currentArticle && isComplete && (
+              /* Only reachable while the final exclude's reason bar is open */
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <p className="font-medium mb-1">All abstracts screened</p>
+                <p className="text-sm">Tag or dismiss the last exclusion below to see your results.</p>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -376,6 +408,16 @@ export default function ScreeningView() {
         </div>
       )}
 
+      {/* Optional exclusion reason bar (abstract mode only, never blocks) */}
+      {isAbstractMode && lastExclude && project.exclusionReasons?.length > 0 && (
+        <ExclusionReasonBar
+          reasons={project.exclusionReasons}
+          articleTitle={lastExclude.title}
+          onSelect={handleTagReason}
+          onDismiss={handleDismissReasonBar}
+        />
+      )}
+
       {/* ── Action buttons (Yes / No / Maybe) ── */}
       <div className="px-4 pb-6 pt-2 flex items-center justify-center gap-4 max-w-[600px] w-full mx-auto shrink-0 border-t border-gray-100 dark:border-gray-800">
         <button
@@ -403,16 +445,6 @@ export default function ScreeningView() {
           <span className="text-[10px] font-semibold mt-0.5">Yes</span>
         </button>
       </div>
-
-      {/* Exclusion reason picker (abstract mode only) */}
-      {showExclusionPicker && isAbstractMode && project.exclusionReasons?.length > 0 && (
-        <ExclusionReasonPicker
-          reasons={project.exclusionReasons}
-          articleTitle={excludedArticleTitle}
-          onSelect={handleExclusionReasonSelected}
-          onSkip={handleSkipExclusionReason}
-        />
-      )}
 
       {/* Keyboard shortcuts help */}
       <KeyboardShortcuts />

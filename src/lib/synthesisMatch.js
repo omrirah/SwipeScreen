@@ -146,6 +146,7 @@ export function matchReviewers(reviewerDatasets) {
   });
 
   // Try to match each anchor article
+  const matchedAnchorIndices = new Set();
   anchor.data.forEach((anchorRow, anchorIdx) => {
     const anchorDOI = normalizeDOI(getDOI(anchorRow));
     const anchorPMID = (getPMID(anchorRow) || '').trim();
@@ -191,6 +192,12 @@ export function matchReviewers(reviewerDatasets) {
             if (idx.used.has(otherIdx)) return;
             const otherTitle = normalizeTitle(getTitle(otherRow));
             if (!otherTitle) return;
+
+            // Levenshtein distance is at least the length difference, so a
+            // pair this unequal can never reach the 0.9 similarity threshold.
+            // Skipping it keeps huge mismatched lists from freezing the tab.
+            const maxLen = Math.max(anchorTitle.length, otherTitle.length);
+            if (Math.abs(anchorTitle.length - otherTitle.length) > 0.1 * maxLen) return;
 
             const sim = similarity(anchorTitle, otherTitle);
             if (sim >= 0.9 && sim > bestSim) {
@@ -238,20 +245,20 @@ export function matchReviewers(reviewerDatasets) {
       }
 
       matched.push(pair);
+      matchedAnchorIndices.add(anchorIdx);
     }
   });
 
-  // Collect unmatched from each reviewer
-  // Track which anchor indices were matched
-  const anchorMatchedTitles = new Set(matched.map(m => normalizeTitle(m.title)));
+  // Collect unmatched from each reviewer, tracked by row index — titles can
+  // be duplicated or empty, so they are not a reliable key
   const unmatchedPerReviewer = [];
 
   // Unmatched from anchor (reviewer 0)
   anchor.data.forEach((row, idx) => {
-    const title = normalizeTitle(getTitle(row));
-    if (!anchorMatchedTitles.has(title)) {
+    if (!matchedAnchorIndices.has(idx)) {
       unmatchedPerReviewer.push({
         reviewerIndex: 0,
+        rowIndex: idx,
         articleTitle: getTitle(row) || `Row ${idx + 1}`,
         reason: 'no match found',
       });
@@ -265,6 +272,7 @@ export function matchReviewers(reviewerDatasets) {
       if (!idx.used.has(rowIdx)) {
         unmatchedPerReviewer.push({
           reviewerIndex: oi + 1,
+          rowIndex: rowIdx,
           articleTitle: getTitle(row) || `Row ${rowIdx + 1}`,
           reason: 'no match found',
         });
@@ -272,5 +280,13 @@ export function matchReviewers(reviewerDatasets) {
     });
   }
 
-  return { matched, fuzzyPending, totalPerReviewer: reviewerDatasets.map(r => r.data.length), unmatchedPerReviewer };
+  return {
+    matched,
+    fuzzyPending,
+    totalPerReviewer: reviewerDatasets.map(r => r.data.length),
+    unmatchedPerReviewer,
+    // Row indices each non-anchor reviewer has already contributed to a
+    // matched pair — fuzzy approval must not reuse them
+    usedPerOther: otherIndices.map(idx => [...idx.used]),
+  };
 }

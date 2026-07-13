@@ -27,6 +27,14 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
   const bgColor = CARD_COLORS[colorIndex];
   const darkBgColor = DARK_CARD_COLORS[colorIndex];
 
+  // Database exports carry DOIs as bare ids, doi:-prefixed, or full URLs —
+  // reduce to the bare id so the link doesn't end up double-prefixed
+  const doiId = article.doi
+    ? String(article.doi).trim()
+        .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+        .replace(/^doi:\s*/i, '')
+    : '';
+
   return (
     <div
       className="w-full max-w-[600px] rounded-2xl shadow-lg p-5 select-none relative overflow-hidden"
@@ -67,9 +75,9 @@ export default function SwipeCard({ article, screeningPhase, index = 0 }) {
           <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
             {article.year && <span>{article.year}</span>}
             {article.journal && <span className="truncate">{article.journal}</span>}
-            {article.doi && (
+            {doiId && (
               <a
-                href={`https://doi.org/${article.doi}`}
+                href={`https://doi.org/${doiId}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}

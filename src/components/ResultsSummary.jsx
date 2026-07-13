@@ -61,7 +61,7 @@ export default function ResultsSummary() {
   }, [decisions, project]);
 
   const formatTime = (ms) => {
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1000) return `${Math.round(ms)}ms`;
     const seconds = ms / 1000;
     if (seconds < 60) return `${seconds.toFixed(1)}s`;
     const minutes = Math.floor(seconds / 60);
@@ -179,12 +179,16 @@ export default function ResultsSummary() {
         >
           Save Progress (JSON)
         </button>
-        <button
-          onClick={() => navigate(`/project/${id}/screen`)}
-          className="w-full py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-        >
-          {stats.total < project.totalArticles ? 'Continue screening' : 'Review cards'}
-        </button>
+        {/* The screening view immediately returns here once a project is
+            complete, so only offer the link while screening is unfinished */}
+        {stats.total < project.totalArticles && (
+          <button
+            onClick={() => navigate(`/project/${id}/screen`)}
+            className="w-full py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          >
+            Continue screening
+          </button>
+        )}
       </div>
     </div>
   );

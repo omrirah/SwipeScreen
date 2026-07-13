@@ -113,9 +113,10 @@ export default function ProjectSetup() {
 
   const handleStartScreening = async () => {
     setIsImporting(true);
+    let projectId = null;
 
     try {
-      const projectId = await db.projects.add({
+      projectId = await db.projects.add({
         name: projectName.trim(),
         reviewerName: reviewerName.trim(),
         screeningPhase,
@@ -150,6 +151,17 @@ export default function ProjectSetup() {
 
       navigate(`/project/${projectId}/screen`);
     } catch (err) {
+      // Don't leave a half-imported project behind
+      if (projectId != null) {
+        try {
+          await db.transaction('rw', [db.projects, db.articles], async () => {
+            await db.articles.where('projectId').equals(projectId).delete();
+            await db.projects.delete(projectId);
+          });
+        } catch {
+          // cleanup is best-effort; the import error below is what matters
+        }
+      }
       setParseError(`Import failed: ${err.message}`);
       setIsImporting(false);
     }

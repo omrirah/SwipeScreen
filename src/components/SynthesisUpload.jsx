@@ -117,6 +117,14 @@ export default function SynthesisUpload() {
     const getDOI = (row) => row.DOI || row.doi || '';
     const normTitle = (t) => (t || '').toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
 
+    // Rows each non-anchor reviewer has already contributed to a matched
+    // pair (exact matches plus earlier fuzzy approvals) — a row must never
+    // end up in two pairs or the agreement stats count it twice
+    const used = (matchResult.usedPerOther || reviewerData.slice(1).map(() => []))
+      .map(arr => new Set(arr));
+    used[fp.otherReviewerIndex - 1]?.add(fp.otherRowIndex);
+    const consumedKeys = new Set([`0:${fp.anchorIdx}`, `${fp.otherReviewerIndex}:${fp.otherRowIndex}`]);
+
     const decisions = [
       { reviewer: reviewerData[0].reviewerName, decision: getDecision(anchorRow), reason: getReason(anchorRow) },
     ];
@@ -130,15 +138,18 @@ export default function SynthesisUpload() {
       } else {
         const anchorDOI = (getDOI(anchorRow) || '').toLowerCase().trim();
         const anchorTitle = normTitle(getTitle(anchorRow));
-        for (const candidate of reviewerData[ri].data) {
+        const usedSet = used[ri - 1];
+        const rows = reviewerData[ri].data;
+        for (let ci = 0; ci < rows.length; ci++) {
+          if (usedSet?.has(ci)) continue;
+          const candidate = rows[ci];
           const candDOI = (getDOI(candidate) || '').toLowerCase().trim();
-          if (anchorDOI && candDOI && candDOI === anchorDOI) {
-            row = candidate;
-            break;
-          }
           const candTitle = normTitle(getTitle(candidate));
-          if (anchorTitle && candTitle && candTitle === anchorTitle) {
+          if ((anchorDOI && candDOI && candDOI === anchorDOI) ||
+              (anchorTitle && candTitle && candTitle === anchorTitle)) {
             row = candidate;
+            usedSet?.add(ci);
+            consumedKeys.add(`${ri}:${ci}`);
             break;
           }
         }
@@ -164,8 +175,24 @@ export default function SynthesisUpload() {
     };
 
     const updatedMatched = [...matchResult.matched, newMatch];
-    setMatchResult({ ...matchResult, matched: updatedMatched });
-    setFuzzyPending(prev => prev.filter((_, i) => i !== idx));
+    // The approved rows are matched now — drop them from the unmatched list
+    const updatedUnmatched = (matchResult.unmatchedPerReviewer || []).filter(
+      u => u.rowIndex == null || !consumedKeys.has(`${u.reviewerIndex}:${u.rowIndex}`)
+    );
+    setMatchResult({
+      ...matchResult,
+      matched: updatedMatched,
+      unmatchedPerReviewer: updatedUnmatched,
+      usedPerOther: used.map(s => [...s]),
+    });
+    // Drop this suggestion plus any that can no longer be approved: same
+    // anchor (would create a second pair for one article) or a row just
+    // consumed by this approval
+    setFuzzyPending(prev => prev.filter((f, i) =>
+      i !== idx &&
+      f.anchorIdx !== fp.anchorIdx &&
+      !used[f.otherReviewerIndex - 1]?.has(f.otherRowIndex)
+    ));
     recalcKappa(updatedMatched);
   };
 

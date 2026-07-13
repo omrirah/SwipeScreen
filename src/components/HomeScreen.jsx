@@ -8,7 +8,6 @@ export default function HomeScreen({ darkMode, setDarkMode }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [importError, setImportError] = useState('');
   const fileInputRef = useRef(null);
-  const resumePhaseRef = useRef(null);
   const navigate = useNavigate();
 
   // Split projects by phase
@@ -81,8 +80,7 @@ export default function HomeScreen({ darkMode, setDarkMode }) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const openResumeDialog = (phase) => {
-    resumePhaseRef.current = phase;
+  const openResumeDialog = () => {
     fileInputRef.current?.click();
   };
 
@@ -221,7 +219,7 @@ export default function HomeScreen({ darkMode, setDarkMode }) {
                   + New
                 </Link>
                 <button
-                  onClick={() => openResumeDialog('title')}
+                  onClick={openResumeDialog}
                   className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                   Resume
@@ -289,7 +287,7 @@ export default function HomeScreen({ darkMode, setDarkMode }) {
                   + New
                 </Link>
                 <button
-                  onClick={() => openResumeDialog('abstract')}
+                  onClick={openResumeDialog}
                   className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                   Resume

@@ -40,7 +40,7 @@ export async function exportDecisionsCSV(projectId) {
 
   const csv = Papa.unparse(rows);
   const dateStr = new Date().toISOString().slice(0, 10);
-  const filename = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_${project.reviewerName}_${project.screeningPhase}_${dateStr}.csv`;
+  const filename = `${safeFilePart(project.name)}_${safeFilePart(project.reviewerName)}_${project.screeningPhase}_${dateStr}.csv`;
   triggerDownload(csv, filename);
 }
 
@@ -102,8 +102,14 @@ export async function exportProgressJSON(projectId) {
   };
 
   const json = JSON.stringify(snapshot, null, 2);
-  const filename = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_progress.json`;
+  const filename = `${safeFilePart(project.name)}_progress.json`;
   triggerDownload(json, filename, 'application/json');
+}
+
+// Project names and reviewer names are free text — keep filenames valid on
+// every OS by reducing them to a safe character set.
+function safeFilePart(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9]/g, '_');
 }
 
 function triggerDownload(content, filename, mimeType = 'text/csv;charset=utf-8;') {

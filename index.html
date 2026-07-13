@@ -13,10 +13,26 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      // '%MODE%' is replaced by Vite at serve/build time. The service worker
+      // is production-only: on the dev server its cache-first strategy would
+      // cache Vite's transformed modules and keep serving stale code after
+      // source edits. In dev, actively remove any previously installed worker
+      // and its caches so an already-poisoned browser heals on next reload.
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').catch(() => {});
-        });
+        if ('%MODE%' === 'production') {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
+          });
+        } else {
+          navigator.serviceWorker.getRegistrations()
+            .then((regs) => regs.forEach((r) => r.unregister()))
+            .catch(() => {});
+          if (window.caches) {
+            caches.keys()
+              .then((keys) => keys.forEach((k) => caches.delete(k)))
+              .catch(() => {});
+          }
+        }
       }
     </script>
   </body>
